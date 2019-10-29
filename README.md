@@ -14,6 +14,7 @@ Docker image which has installed the following:
 - git-lfs
 - protoc
 - unzip
+- netcat
 
 Also see [Docker Hub](https://hub.docker.com/r/canvadev/ci-docker-node-yarn-chrome-xvfb/).
 
