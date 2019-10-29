@@ -12,6 +12,8 @@ Docker image which has installed the following:
 - build-essential
 - dependencies for node-canvas
 - git-lfs
+- protoc
+- unzip
 
 Also see [Docker Hub](https://hub.docker.com/r/canvadev/ci-docker-node-yarn-chrome-xvfb/).
 

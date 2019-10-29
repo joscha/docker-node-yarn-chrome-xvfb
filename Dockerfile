@@ -154,6 +154,27 @@ RUN apt-get update && \
 	&& rm -rf /var/lib/apt/lists/*
 RUN git lfs install
 
+# protoc
+ENV PROTOBUF_VERSION 3.9.1
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      unzip \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN ARCH= && dpkgArch="$(dpkg --print-architecture)" \
+  && case "${dpkgArch##*-}" in \
+    amd64) ARCH='x86_64';; \
+    ppc64el) ARCH='ppcle_64';; \
+    s390x) ARCH='s390x_64';; \
+    arm64) ARCH='aarch_64';; \
+    i386) ARCH='x86_32';; \
+    *) echo "unsupported architecture"; exit 1 ;; \
+  esac \
+  && curl -fsSLO --compressed "https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOBUF_VERSION/protoc-$PROTOBUF_VERSION-linux-$ARCH.zip" \
+  && unzip "protoc-$PROTOBUF_VERSION-linux-$ARCH.zip" -d /usr/local \
+  && rm "protoc-$PROTOBUF_VERSION-linux-$ARCH.zip"
+
 RUN \
     export DISPLAY=:99.0
 
