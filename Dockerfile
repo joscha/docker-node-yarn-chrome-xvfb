@@ -1,92 +1,103 @@
-# We don't really want xenial, ideally we'd use sid, but there is no libpng12-0 for sid, which we need for canvas-prebuilt.
-# And there is no oracle-java10 for jessie, so we can't use that either (jessie has libpng12-0 at least)
-# Ideally we'd inherit from node:10, however node:10 is only there for jessie, not for xenial, so we inherit from buildpack-deps:xenial-scm
-# and mix and match all the dependencies we need. Present Joscha is unhappy about that, but future Joscha will hopefully get a chance
-# to clean up this mess.
-FROM buildpack-deps:xenial-scm
+FROM alpine:3.10
 
-# jdk
-#
-# UTF-8 by default
-#
-RUN apt-get -qq update && \
-    apt-get -qqy install gnupg2 locales && \
-    locale-gen en_US.UTF-8 && \
-    rm -rf /var/lib/apt/lists/*
+
+# --- Begin Java ---
+# Copied from https://github.com/zulu-openjdk/zulu-openjdk/blob/master/alpine/13-latest/Dockerfile
 
 ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
+ENV JAVA_HOME=/usr/lib/jvm/zulu-13
+RUN ZULU_ARCH=zulu13.28.11-ca-jdk13.0.1-linux_musl_x64.tar.gz && \
+    INSTALL_DIR=$( dirname $JAVA_HOME ) && \
+    BIN_DIR=/usr/bin && \
+    MAN_DIR=/usr/share/man/man1 && \
+    ZULU_DIR=$( basename ${ZULU_ARCH} .tar.gz ) && \
+    wget -q https://cdn.azul.com/zulu/bin/${ZULU_ARCH} && \
+    mkdir -p ${INSTALL_DIR} && \
+    tar -xf ./${ZULU_ARCH} -C ${INSTALL_DIR} && rm -f ${ZULU_ARCH} && \
+    mv ${INSTALL_DIR}/${ZULU_DIR} ${JAVA_HOME} && \
+    cd ${BIN_DIR} && find ${JAVA_HOME}/bin -type f -perm -a=x -exec ln -s {} . \; && \
+    mkdir -p ${MAN_DIR} && \
+    cd ${MAN_DIR} && find ${JAVA_HOME}/man/man1 -type f -name "*.1" -exec ln -s {} . \;
 
-#
-# Pull Zulu OpenJDK binaries from official repository:
-#
-RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 0xB1998361219BD9C9 && \
-    echo "deb http://repos.azulsystems.com/ubuntu stable main" >> /etc/apt/sources.list.d/zulu.list && \
-    apt-get -qq update && \
-    apt-get -qqy install zulu-10 && \
-    rm -rf /var/lib/apt/lists/*
+# --- End Java ---
 
 # --- Begin node ---
-# Copied and adapted from https://github.com/nodejs/docker-node/blob/master/10/jessie/Dockerfile
+# Copied from https://github.com/nodejs/docker-node/blob/master/10/alpine/Dockerfile
 
-#
-# Pull xz:
-#
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-		  xz-utils \
-	&& rm -rf /var/lib/apt/lists/*
+ENV NODE_VERSION 10.17.0
 
-# ATTENTION: The UID is adapted here, in order to match up with the buildkite-agent user (which is UID 999)
-# in order for files created inside the docker container have the correct rights outside (if we don't do this
-# then future CI runs can not clean up node_modules/** because the buildkite-agent doesn't have the rights to
-# write/delete these files)
-RUN groupadd --gid 999 node \
-  && useradd --uid 999 --gid node --shell /bin/bash --create-home node
-
-ENV NODE_VERSION 10.16.3
-
-RUN ARCH= && dpkgArch="$(dpkg --print-architecture)" \
-  && case "${dpkgArch##*-}" in \
-    amd64) ARCH='x64';; \
-    ppc64el) ARCH='ppc64le';; \
-    s390x) ARCH='s390x';; \
-    arm64) ARCH='arm64';; \
-    armhf) ARCH='armv7l';; \
-    i386) ARCH='x86';; \
-    *) echo "unsupported architecture"; exit 1 ;; \
-  esac \
-  # gpg keys listed at https://github.com/nodejs/node#release-keys
-  && set -ex \
-  && for key in \
-    94AE36675C464D64BAFA68DD7434390BDBE9B9C5 \
-    FD3A5288F042B6850C66B31F09FE44734EB7990E \
-    71DCFD284A79C3B38668286BC97EC7A07EDE3FC1 \
-    DD8F2338BAE7501E3DD5AC78C273792F7D83545D \
-    C4F0DFFF4E8C1A8236409D08E73BC641CC11F4C8 \
-    B9AE9905FFD7803F25714661B63B535A4C206CA9 \
-    77984A986EBC2AA786BC0F66B01FBB92821C587A \
-    8FCCA13FEF1D0C2E91008E09770F7A9A5AE15600 \
-    4ED778F539E3634C779C87C6D7062848A1AB005C \
-    A48C2BEE680E841632CD4E44F07496B3EB3C1762 \
-    B9E2F5981AA6E0CD28160D9FF13993A75599653C \
-  ; do \
-    gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys "$key" || \
-    gpg --batch --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys "$key" || \
-    gpg --batch --keyserver hkp://pgp.mit.edu:80 --recv-keys "$key" ; \
-  done \
-  && curl -fsSLO --compressed "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-$ARCH.tar.xz" \
-  && curl -fsSLO --compressed "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt.asc" \
-  && gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc \
-  && grep " node-v$NODE_VERSION-linux-$ARCH.tar.xz\$" SHASUMS256.txt | sha256sum -c - \
-  && tar -xJf "node-v$NODE_VERSION-linux-$ARCH.tar.xz" -C /usr/local --strip-components=1 --no-same-owner \
-  && rm "node-v$NODE_VERSION-linux-$ARCH.tar.xz" SHASUMS256.txt.asc SHASUMS256.txt \
-  && ln -s /usr/local/bin/node /usr/local/bin/nodejs
+RUN addgroup -g 1000 node \
+    && adduser -u 1000 -G node -s /bin/sh -D node \
+    && apk add --no-cache \
+        libstdc++ \
+    && apk add --no-cache --virtual .build-deps \
+        curl \
+    && ARCH= && alpineArch="$(arch)" \
+      && case "${alpineArch##*-}" in \
+        x86_64) \
+          ARCH='x64' \
+          CHECKSUM="f893a03c5b51e0c540e32cd52773221a2f9b6d575e7fe79ffe9e878483c703ff" \
+          ;; \
+        *) ;; \
+      esac \
+  && if [ -n "${CHECKSUM}" ]; then \
+    set -eu; \
+    curl -fsSLO --compressed "https://unofficial-builds.nodejs.org/download/release/v$NODE_VERSION/node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz"; \
+    echo "$CHECKSUM  node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz" | sha256sum -c - \
+      && tar -xJf "node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz" -C /usr/local --strip-components=1 --no-same-owner \
+      && ln -s /usr/local/bin/node /usr/local/bin/nodejs; \
+  else \
+    echo "Building from source" \
+    # backup build
+    && apk add --no-cache --virtual .build-deps-full \
+        binutils-gold \
+        g++ \
+        gcc \
+        gnupg \
+        libgcc \
+        linux-headers \
+        make \
+        python \
+    # gpg keys listed at https://github.com/nodejs/node#release-keys
+    && for key in \
+      94AE36675C464D64BAFA68DD7434390BDBE9B9C5 \
+      FD3A5288F042B6850C66B31F09FE44734EB7990E \
+      71DCFD284A79C3B38668286BC97EC7A07EDE3FC1 \
+      DD8F2338BAE7501E3DD5AC78C273792F7D83545D \
+      C4F0DFFF4E8C1A8236409D08E73BC641CC11F4C8 \
+      B9AE9905FFD7803F25714661B63B535A4C206CA9 \
+      77984A986EBC2AA786BC0F66B01FBB92821C587A \
+      8FCCA13FEF1D0C2E91008E09770F7A9A5AE15600 \
+      4ED778F539E3634C779C87C6D7062848A1AB005C \
+      A48C2BEE680E841632CD4E44F07496B3EB3C1762 \
+      B9E2F5981AA6E0CD28160D9FF13993A75599653C \
+    ; do \
+      gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys "$key" || \
+      gpg --batch --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys "$key" || \
+      gpg --batch --keyserver hkp://pgp.mit.edu:80 --recv-keys "$key" ; \
+    done \
+    && curl -fsSLO --compressed "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION.tar.xz" \
+    && curl -fsSLO --compressed "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt.asc" \
+    && gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc \
+    && grep " node-v$NODE_VERSION.tar.xz\$" SHASUMS256.txt | sha256sum -c - \
+    && tar -xf "node-v$NODE_VERSION.tar.xz" \
+    && cd "node-v$NODE_VERSION" \
+    && ./configure \
+    && make -j$(getconf _NPROCESSORS_ONLN) V= \
+    && make install \
+    && apk del .build-deps-full \
+    && cd .. \
+    && rm -Rf "node-v$NODE_VERSION" \
+    && rm "node-v$NODE_VERSION.tar.xz" SHASUMS256.txt.asc SHASUMS256.txt; \
+  fi \
+  && rm -f "node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz" \
+  && apk del .build-deps
 
 ENV YARN_VERSION 1.12.3
 
-RUN set -ex \
+RUN apk add --no-cache --virtual .build-deps-yarn curl gnupg tar \
   && for key in \
     6A010C5166006599AA17F08146C2130DFD2497F5 \
   ; do \
@@ -101,80 +112,28 @@ RUN set -ex \
   && tar -xzf yarn-v$YARN_VERSION.tar.gz -C /opt/ \
   && ln -s /opt/yarn-v$YARN_VERSION/bin/yarn /usr/local/bin/yarn \
   && ln -s /opt/yarn-v$YARN_VERSION/bin/yarnpkg /usr/local/bin/yarnpkg \
-  && rm yarn-v$YARN_VERSION.tar.gz.asc yarn-v$YARN_VERSION.tar.gz
+  && rm yarn-v$YARN_VERSION.tar.gz.asc yarn-v$YARN_VERSION.tar.gz \
+  && apk del .build-deps-yarn
 
 # --- End node ---
 
 # Brings make, etc. for building node binaries
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-		  build-essential \
-	&& rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache --virtual .build-deps \
+  alpine-sdk \
+  jq \
+  git \
+  git-lfs \
+  protobuf \
+  unzip \
+  netcat-openbsd \
+  xorg-server \
+  && apk del .build-deps
 
-# For node-canvas
-# https://github.com/Automattic/node-canvas
-# We use canvas-prebuilt, but still need the bindings (e.g. libpng12-0)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      libpng12-0 \
-      libcairo2-dev \
-      libjpeg-dev \
-      libpango1.0-dev \
-      libgif-dev \
-      g++ \
-	&& rm -rf /var/lib/apt/lists/*
-
-# jq
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-		  jq \
-	&& rm -rf /var/lib/apt/lists/*
-
-# Chrome & Xvfb
-RUN \
-    wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
-    echo "deb http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list && \
-    apt-get update && \
-    apt-get install -y \
-      google-chrome-stable \
-      xvfb \
-  && rm -rf /var/lib/apt/lists/*
-
-# AWS CLI
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-		  awscli \
-	&& rm -rf /var/lib/apt/lists/*
-
-# git LFS
-RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-		  git-lfs \
-	&& rm -rf /var/lib/apt/lists/*
-RUN git lfs install
-
-# protoc
-ENV PROTOBUF_VERSION 3.9.1
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      unzip \
-      netcat \
-  && rm -rf /var/lib/apt/lists/*
-
-RUN ARCH= && dpkgArch="$(dpkg --print-architecture)" \
-  && case "${dpkgArch##*-}" in \
-    amd64) ARCH='x86_64';; \
-    ppc64el) ARCH='ppcle_64';; \
-    s390x) ARCH='s390x_64';; \
-    arm64) ARCH='aarch_64';; \
-    i386) ARCH='x86_32';; \
-    *) echo "unsupported architecture"; exit 1 ;; \
-  esac \
-  && curl -fsSLO --compressed "https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOBUF_VERSION/protoc-$PROTOBUF_VERSION-linux-$ARCH.zip" \
-  && unzip "protoc-$PROTOBUF_VERSION-linux-$ARCH.zip" -d /usr/local \
-  && rm "protoc-$PROTOBUF_VERSION-linux-$ARCH.zip"
+# Install aws-cli
+RUN apk -Uuv add groff less python py-pip
+RUN pip install awscli
+RUN apk --purge -v del py-pip
+RUN rm /var/cache/apk/*
 
 RUN \
     export DISPLAY=:99.0
