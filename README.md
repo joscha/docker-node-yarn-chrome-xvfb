@@ -6,7 +6,7 @@ Docker image which has installed the following:
 - Yarn
 - Chrome
 - Xvfb
-- JDK 10
+- JDK 11
 - AWS CLI
 - jq
 - build-essential
