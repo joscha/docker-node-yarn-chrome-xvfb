@@ -45,7 +45,7 @@ RUN apt-get update && \
 RUN groupadd --gid 999 node \
   && useradd --uid 999 --gid node --shell /bin/bash --create-home node
 
-ENV NODE_VERSION 12.13.1
+ENV NODE_VERSION 10.16.3
 
 RUN ARCH= && dpkgArch="$(dpkg --print-architecture)" \
   && case "${dpkgArch##*-}" in \
@@ -143,8 +143,9 @@ RUN \
 # AWS CLI
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-		  awscli \
-	&& rm -rf /var/lib/apt/lists/*
+		  python3-pip python3-setuptools python3-wheel \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& pip3 install awscli
 
 # git LFS
 RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
