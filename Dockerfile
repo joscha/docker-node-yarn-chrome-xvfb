@@ -45,7 +45,7 @@ RUN apt-get update && \
 RUN groupadd --gid 999 node \
   && useradd --uid 999 --gid node --shell /bin/bash --create-home node
 
-ENV NODE_VERSION 10.16.3
+ENV NODE_VERSION 12.14.0
 
 RUN ARCH= && dpkgArch="$(dpkg --print-architecture)" \
   && case "${dpkgArch##*-}" in \
