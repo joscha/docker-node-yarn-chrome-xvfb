@@ -177,6 +177,14 @@ RUN ARCH= && dpkgArch="$(dpkg --print-architecture)" \
   && unzip "protoc-$PROTOBUF_VERSION-linux-$ARCH.zip" -d /usr/local \
   && rm "protoc-$PROTOBUF_VERSION-linux-$ARCH.zip"
 
+#
+# Pull wamerican:
+#
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      wamerican \
+  && rm -rf /var/lib/apt/lists/*
+
 RUN \
     export DISPLAY=:99.0
 
