@@ -147,6 +147,15 @@ RUN apt-get update && \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& pip3 install awscli
 
+# Upgrade git
+RUN apt-get update \
+    && apt-get install -y software-properties-common \
+    && add-apt-repository ppa:git-core/ppa -y \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+		  git \
+    && rm -rf /var/lib/apt/lists/*
+
 # git LFS
 RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
 RUN apt-get update && \
