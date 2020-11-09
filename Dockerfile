@@ -130,6 +130,12 @@ RUN apt-get update && \
 		  jq \
 	&& rm -rf /var/lib/apt/lists/*
 
+# zip
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      zip \
+  && rm -rf /var/lib/apt/lists/*
+
 # Chrome & Xvfb
 RUN \
     wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
